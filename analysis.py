@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+import numpy as np
 
 pd.set_option("display.max_columns", 200)
 pd.set_option("display.width", 200)
@@ -78,50 +81,45 @@ print("Day 컬럼 준비 완료:", all_days)
 
 #%%
 # 2) Visualization Design System (colors, sizes, lines)
-
+# 디자인 시스템을 최신 버전으로 업데이트합니다.
 VIZ = {
-    # semantic colors
-    "pre": "#909090",           # 개입 전(중립)
-    "post_increase": "#2F6BFF",  # 개입 후(증가)
-    "post_decrease": "#E5484D",  # 개입 후(감소)
-    "post_nochange": "#8A8A8A",  # 개입 후(변화없음)
-
-    # general
-    "axis": "#4A4A4A",
-    "grid": "#E6E6E6",
-    "ref_line": "#9AA0A6",
-
-    # linewidths / sizes
-    "lw_main": 2,
-    "lw_ref": 1,
-    "ms_pre": 40,
-    "ms_post": 55,
-
-    # figure
-    "fig_w": 10,
-    "fig_h": 6,
+    "pre": "#BDC3C7",           # 시작 전 (회색)
+    "post_increase": "#2471A3",  # 증가 (진한 파랑)
+    "post_decrease": "#C0392B",  # 감소 (진한 빨강)
+    "post_nochange": "#7F8C8D",  # 변화 없음
+    "axis": "#2C3E50",
+    "grid": "#F2F4F4",
+    
+    # 에러가 발생했던 부분: 연결선 두께 키 이름 확인
+    "lw_main": 2.5,             
+    "lw_connector": 3.0,        # <- 이 키가 꼭 있어야 합니다.
+    "lw_ref": 1.2,              
+    
+    "ms_pre": 100,               
+    "ms_post": 100,             
+    
+    "fig_w": 12, "fig_h": 7,
     "dpi": 120,
+    "font_title": 15, "font_label": 10, "font_val": 9
 }
 
+# 보조 함수도 VIZ를 참조하므로 다시 정의해주는 것이 좋습니다.
 def color_post(diff_value: int) -> str:
-    if diff_value > 0:
-        return VIZ["post_increase"]
-    if diff_value < 0:
-        return VIZ["post_decrease"]
+    if diff_value > 0: return VIZ["post_increase"]
+    if diff_value < 0: return VIZ["post_decrease"]
     return VIZ["post_nochange"]
 
-def apply_viz_style():
-    plt.rcParams["figure.dpi"] = VIZ["dpi"]
-    plt.rcParams["axes.edgecolor"] = VIZ["axis"]
-    plt.rcParams["axes.labelcolor"] = VIZ["axis"]
-    plt.rcParams["xtick.color"] = VIZ["axis"]
-    plt.rcParams["ytick.color"] = VIZ["axis"]
-    plt.rcParams["grid.color"] = VIZ["grid"]
-    plt.rcParams["grid.linewidth"] = VIZ["lw_ref"]
-    plt.rcParams["axes.grid"] = True
+print("VIZ 시스템 업데이트 완료! 이제 그래프 함수를 다시 실행해 보세요.")
 
-apply_viz_style()
+def apply_global_style():
+    plt.rcParams.update({
+        "figure.dpi": 120,
+        "axes.edgecolor": VIZ["pre"],
+        "axes.unicode_minus": False, # 마이너스 기호 깨짐 방지
+        "font.family": "sans-serif"  # 한글 사용 시 'Malgun Gothic' 등으로 변경 권장
+    })
 
+apply_global_style()
 
 #%%
 # 3) 기술통계
@@ -161,67 +159,112 @@ diff = df["차이"].dropna()
 n = int(diff.shape[0])
 
 
+def plot_dumbbell(df):
+    plot_df = df.sort_values("차이", ascending=True).copy()
+    y_pos = np.arange(len(plot_df))
+    
+    fig, ax = plt.subplots(figsize=(VIZ["fig_w"], len(plot_df)*0.4 + 2))
+    
+    for i, row in enumerate(plot_df.itertuples()):
+        color = color_post(row.차이)
+        # 덤벨 선
+        ax.hlines(y=i, xmin=row.시작전_평균, xmax=row.시작후_평균, 
+                  color=color, alpha=0.4, linewidth=VIZ["lw_connector"], zorder=1)
+        # 점 (Pre/Post)
+        ax.scatter(row.시작전_평균, i, s=VIZ["ms_pre"], color=VIZ["pre"], edgecolor='white', zorder=2)
+        ax.scatter(row.시작후_평균, i, s=VIZ["ms_post"], color=color, edgecolor='white', zorder=3)
+        # 수치 표시
+        diff_text = f"{row.차이:+,}"
+        ax.text(max(row.시작전_평균, row.시작후_평균) + 150, i, diff_text, 
+                va='center', fontweight='bold', color=color, fontsize=VIZ["font_val"])
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(plot_df["사용자ID"], fontsize=VIZ["font_label"])
+    ax.grid(axis='x', color=VIZ["grid"], linestyle='-', zorder=0)
+    ax.set_title("Individual Step Change: Pre vs Post Intervention", loc='left', pad=20, fontsize=VIZ["font_title"], fontweight='bold')
+    
+    # 테두리 정리
+    for spine in ["top", "right"]: ax.spines[spine].set_visible(False)
+    
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', label='Pre', markerfacecolor=VIZ["pre"], markersize=10),
+        Line2D([0], [0], marker='o', color='w', label='Post (Inc)', markerfacecolor=VIZ["post_increase"], markersize=10),
+        Line2D([0], [0], marker='o', color='w', label='Post (Dec)', markerfacecolor=VIZ["post_decrease"], markersize=10)
+    ]
+    ax.legend(handles=legend_elements, loc='lower right', frameon=False)
+    plt.tight_layout()
+    plt.show()
+
+
+# -----------------------------------------------------------------------------
+# 8) 시각화 B: 막대 그래프 (절대 변화량 순 정렬)
+# -----------------------------------------------------------------------------
+def plot_bar_changes(df):
+    plot_df = df.assign(abs_diff=df["차이"].abs()).sort_values("abs_diff", ascending=False).copy()
+    
+    x = np.arange(len(plot_df))
+    width = 0.35
+    post_colors = [color_post(v) for v in plot_df["차이"]]
+    
+    plt.figure(figsize=(VIZ["fig_w"], VIZ["fig_h"]-1))
+    plt.bar(x - width/2, plot_df["시작전_평균"], width, label="Pre", color=VIZ["pre"], alpha=0.7)
+    plt.bar(x + width/2, plot_df["시작후_평균"], width, label="Post", color=post_colors)
+    
+    plt.xticks(x, plot_df["사용자ID"], rotation=0)
+    plt.ylabel("Average Daily Steps")
+    plt.title("Comparison of Average Steps (Sorted by Impact)", fontsize=VIZ["font_title"], fontweight='bold', pad=15)
+    
+    for i, row in enumerate(plot_df.itertuples()):
+        # 여기를 꼭 확인하세요! row.변화율 (언더바 없음)
+        val_pct = row.변화율 
+        plt.text(i + width/2, row.시작후_평균 + 100, f"{val_pct}%", 
+                 ha='center', fontsize=8, color=color_post(row.차이))
+
+    plt.gca().spines[['top', 'right']].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+    
 #%%
-# 4) 시각화 A: Dumbbell plot (여백 개선 버전)
+# -----------------------------------------------------------------------------
+# 시각화 D: 개별 트래젝토리 (개입 전후 영역 강조)
+# -----------------------------------------------------------------------------
+def plot_trajectories(df_long, diff_map):
+    # 상위 3명만 예시로 출력하거나 루프를 도는 방식 (원하는 대로 조절)
+    pids = sorted(df_long["사용자ID"].unique(), key=lambda x: int(''.join(filter(str.isdigit, str(x)))))
+    
+    for pid in pids[:3]: # 예시로 처음 3명만
+        g = df_long[df_long["사용자ID"] == pid].sort_values("Day")
+        line_color = color_post(diff_map.get(str(pid), 0))
+        
+        fig, ax = plt.subplots(figsize=(VIZ["fig_w"]-2, 4))
+        
+        # 영역 배경색
+        ax.axvspan(g["Day"].min(), -0.5, color='#F7F9F9', zorder=0)
+        ax.axvspan(-0.5, g["Day"].max(), color=line_color, alpha=0.05, zorder=0)
+        
+        # 메인 라인
+        ax.plot(g["Day"], g["걸음수"], marker='o', color=line_color, lw=VIZ["lw_main"], markersize=6, zorder=3)
+        
+        # 평균선 (점선)
+        pre_m = g[g["Day"] < 0]["걸음수"].mean()
+        post_m = g[g["Day"] >= 0]["걸음수"].mean()
+        ax.hlines(pre_m, g["Day"].min(), -0.5, colors=VIZ["pre"], linestyles='--', lw=VIZ["lw_ref"])
+        ax.hlines(post_m, -0.5, g["Day"].max(), colors=line_color, linestyles='--', lw=VIZ["lw_ref"])
+        
+        ax.set_title(f"Step Trajectory: {pid}", fontsize=12, fontweight='bold')
+        ax.set_xlabel("Day (0 = Start)")
+        ax.axvline(x=-0.5, color=VIZ["axis"], lw=0.8, alpha=0.5)
+        
+        plt.tight_layout()
+        plt.show()
 
-plot_df = df.sort_values("차이").copy()
-y = np.arange(len(plot_df))
+# 실행 예시
+plot_dumbbell(df)
+#plot_bar_changes(df)
+# diff_map = dict(zip(df["사용자ID"].astype(str), df["차이"]))
+# plot_trajectories(df_long, diff_map)
 
-plt.figure(figsize=(VIZ["fig_w"], VIZ["fig_h"]))
-
-# 🔧 전체 레이아웃 여백
-plt.subplots_adjust(left=0.22, right=0.97, top=0.90, bottom=0.12)
-
-# 🔧 x축 범위 먼저 고정
-x_min = min(plot_df["시작전_평균"].min(), plot_df["시작후_평균"].max())
-x_max = max(plot_df["시작전_평균"].max(), plot_df["시작후_평균"].max())
-x_pad = (x_max - x_min) * 0.08
-plt.xlim(x_min - x_pad, x_max + x_pad)
-
-text_offset = -x_pad * 0.35
-
-for j, row in enumerate(plot_df.itertuples(index=False)):
-    post_c = color_post(int(row.차이))
-
-    plt.plot(
-        [row.시작전_평균, row.시작후_평균],
-        [j, j],
-        color=post_c,
-        linewidth=VIZ["lw_main"]
-    )
-
-    plt.scatter(row.시작전_평균, j, color=VIZ["pre"], s=VIZ["ms_pre"], zorder=3)
-    plt.scatter(row.시작후_평균, j, color=post_c, s=VIZ["ms_post"], zorder=3)
-
-    # 사용자ID 텍스트 (박스 포함)
-    text_x = row.시작전_평균 + text_offset if row.차이 >= 0 else row.시작후_평균 + text_offset
-
-    plt.text(
-        text_x, j, str(row.사용자ID),
-        ha="right", va="center",
-        fontsize=9,
-        color=VIZ.get("label", "#222"),
-        zorder=4,
-        bbox=dict(
-            boxstyle="round,pad=0.15",
-            facecolor="white",
-            edgecolor="none",
-            alpha=0.75
-        )
-    )
-
-plt.yticks(y, plot_df["사용자ID"])
-plt.xlabel("Average daily steps")
-plt.title("Change in average steps (Pre vs Post)")
-
-from matplotlib.lines import Line2D
-legend_elements = [
-    Line2D([0], [0], color=VIZ["post_increase"], lw=VIZ["lw_main"], label="Increase"),
-    Line2D([0], [0], color=VIZ["post_decrease"], lw=VIZ["lw_main"], label="Decrease"),
-]
-plt.legend(handles=legend_elements)
-
-plt.show()
 
 #%%
 # 8) 시각화 B: 개인별 전/후 평균 막대그래프 (후=증가/감소 색상)
