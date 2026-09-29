@@ -126,8 +126,7 @@ def plot_dumbbell(df):
     ax.set_title("참여자 걸음 수 변화", 
              loc='center', 
              pad=30, 
-             fontsize=VIZ["font_title"], 
-             fontweight='bold') # 이 부분이 핵심입니다.
+             fontsize=VIZ["font_title"],) # 이 부분이 핵심입니다.
     
     # 테두리 설정
     BORDER_COLOR = "#999999"
